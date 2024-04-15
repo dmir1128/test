@@ -13,66 +13,200 @@
     <link rel="stylesheet" href="https://editor.silex.me/static/2.12/normalize.css" data-silex-static="">
     <link rel="stylesheet" href="https://editor.silex.me/static/2.12/front-end.css" data-silex-static="">
 
-    <style class="silex-style">body {background: #000; overflow: hidden;}.firefly {width: 4px; height: 4px; position: absolute; background-color: #ecc45e; box-shadow: 0px 0px 17px 2px wheat; border-radius: 50%;}.container {margin: 0 auto; height: 90vh; position: relative;}</style>
-    <script type="text/javascript" class="silex-script">var fireflies = 25;
-var $container = $(".container");
-var $containerWidth = $container.width();
-var $containerHeight = $container.height();
-var master = new TimelineMax();
+    <style class="silex-style"></style>
+    <script type="text/javascript" class="silex-script">const create360Viewer = require('../');
+const getMaxTextureSize = require('./getMaxTextureSize');
+const dragDrop = require('drag-drop');
 
-for (var i = 0; i < fireflies; i++) {
-  var firefly = $('<div class="firefly"></div>');
-  TweenLite.set(firefly, {
-    x: Math.random() * $containerWidth,
-    y: Math.random() * $containerHeight
+const dropRegion = document.querySelector('#drop-region');
+
+// Get a canvas of some sort, e.g. fullscreen or embedded in a site
+const canvas = createCanvas({
+  canvas: document.querySelector('#canvas'),
+  // without this, the canvas defaults to full-screen
+  // viewport: [ 20, 20, 500, 256 ]
+});
+
+// Get the max image size possible
+const imageUrl = getImageURL();
+
+// whether to always rotate the view
+const autoSpin = false;
+
+// Load your image
+const image = new Image();
+image.src = imageUrl;
+image.onload = () => {
+  // Setup the 360 viewer
+  const viewer = create360Viewer({
+    image: image,
+    canvas: canvas
   });
-  $container.append(firefly);
-  flyTheFirefly(firefly);
+
+  setupDragDrop(canvas, viewer);
+
+  // Start canvas render loop
+  viewer.start();
+
+  viewer.on('tick', (dt) => {
+    if (autoSpin && !viewer.controls.dragging) {
+      viewer.controls.theta -= dt * 0.00005;
+    }
+  });
+};
+
+// Utility to create a device pixel scaled canvas
+function createCanvas (opt = {}) {
+  // default to full screen (no width/height specified)
+  const viewport = opt.viewport || [ 0, 0 ];
+
+  const canvas = opt.canvas || document.createElement('canvas');
+  canvas.style.position = 'absolute';
+  canvas.style.top = `${viewport[0]}px`;
+  canvas.style.left = `${viewport[1]}px`;
+
+  // Resize the canvas with the proper device pixel ratio
+  const resizeCanvas = () => {
+    // default to fullscreen if viewport width/height is unspecified
+    const width = typeof viewport[2] === 'number' ? viewport[2] : window.innerWidth;
+    const height = typeof viewport[3] === 'number' ? viewport[3] : window.innerHeight;
+    const dpr = window.devicePixelRatio;
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
+    canvas.style.width = `${width}px`;
+    canvas.style.height = `${height}px`;
+  };
+
+  // Ensure the grab cursor appears even when the mouse is outside the window
+  const setupGrabCursor = () => {
+    canvas.addEventListener('mousedown', () => {
+      document.documentElement.classList.remove('grabbing');
+      document.documentElement.classList.add('grabbing');
+    });
+    window.addEventListener('mouseup', () => {
+      document.documentElement.classList.remove('grabbing');
+    });
+  };
+
+  window.addEventListener('resize', resizeCanvas);
+  resizeCanvas();
+  setupGrabCursor();
+  return canvas;
 }
 
-function flyTheFirefly(elm) {
-  var flyTl = new TimelineMax();
-  var fadeTl = new TimelineMax({
-    delay: Math.floor(Math.random() * 2) + 1,
-    repeatDelay: Math.floor(Math.random() * 6) + 1,
-    repeat: -1
-  });
+function getImageURL () {
+  // Choose a large texture size based on our GPU
+  const maxTextureSize = getMaxTextureSize();
+  let imageUrl = 'pano_2048.jpg';
+  if (maxTextureSize >= 7000) imageUrl = 'pano_7000.jpg';
+  else if (maxTextureSize >= 4096) imageUrl = 'pano_4096.jpg';
+  return imageUrl;
+}
 
-  fadeTl.to(
-    [elm],
-    0.25,
-    { opacity: 0.25, yoyo: true, repeat: 1, repeatDelay: 0.2, yoyo: true },
-    Math.floor(Math.random() * 6) + 1
-  );
-  
-  flyTl
-    .set(elm, {scale: Math.random() * 0.75 + 0.5})
-    .to(elm, Math.random() * 100 + 100, {
-    bezier: {
-      values: [
-        {
-          x: Math.random() * $containerWidth,
-          y: Math.random() * $containerHeight
-        },
-        {
-          x: Math.random() * $containerWidth,
-          y: Math.random() * $containerHeight
-        }
-      ]
+function setupDragDrop (canvas, viewer) {
+  dragDrop(canvas, {
+    onDragEnter: () => {
+      dropRegion.style.display = '';
     },
-    onComplete: flyTheFirefly,
-    onCompleteParams: [elm]
+    onDragLeave: () => {
+      dropRegion.style.display = 'none';
+    },
+    onDrop: (files) => {
+      var img = new Image();
+      img.onload = () => {
+        viewer.texture(img);
+      };
+      img.onerror = () => {
+        alert('Could not load image!');
+      };
+      img.crossOrigin = 'Anonymous';
+      img.src = URL.createObjectURL(files[0]);
+    }
   });
-}
-</script>
-    <style class="silex-inline-styles">.body-initial {background-color: rgba(255,255,255,1); position: static;}.silex-id-1478366444112-1 {background-color: transparent; position: static; margin-top: -1px;}.silex-id-1478366444112-0 {background-color: rgba(0,0,0,1); min-height: 100px; position: relative; margin-left: auto; margin-right: auto;}.silex-id-1474394621033-3 {position: static; margin-top: -1px;}.silex-id-1474394621032-2 {background-color: rgba(0,0,0,1); min-height: 600px; position: relative; margin-left: auto; margin-right: auto;}.silex-id-1478366450713-3 {background-color: transparent; position: static; margin-top: -1px;}.silex-id-1478366450713-2 {background-color: rgba(0,0,0,1); min-height: 100px; position: relative; margin-left: auto; margin-right: auto;}.silex-id-1442914737143-3 {width: 241px; top: 26px; left: 494px; min-height: 51px; position: absolute;}.silex-id-1713158517534-5 {width: 100px; min-height: 100px; background-color: rgb(255, 255, 255); position: absolute; top: 269px; left: 534px;}@media only screen and (max-width: 480px) {}</style>
+}</script>
+    <style class="silex-inline-styles">.body-initial {background-color: rgba(255,255,255,1); position: static;}.silex-id-1478366444112-1 {background-color: transparent; position: static; margin-top: -1px;}.silex-id-1478366444112-0 {background-color: rgba(0,0,0,1); min-height: 100px; position: relative; margin-left: auto; margin-right: auto;}.silex-id-1474394621033-3 {position: static; margin-top: -1px;}.silex-id-1474394621032-2 {background-color: rgba(0,0,0,1); min-height: 600px; position: relative; margin-left: auto; margin-right: auto;}.silex-id-1478366450713-3 {background-color: transparent; position: static; margin-top: -1px;}.silex-id-1478366450713-2 {background-color: rgba(0,0,0,1); min-height: 100px; position: relative; margin-left: auto; margin-right: auto;}.silex-id-1442914737143-3 {width: 241px; top: 26px; left: 494px; min-height: 51px; position: absolute;}@media only screen and (max-width: 480px) {}</style>
     <title></title>
     
 
     
-<style class="silex-prodotype-style" data-style-id="all-style">.text-element > .silex-element-content {font-family: 'Roboto', sans-serif;}</style><link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet" class="silex-custom-font"><meta name="viewport" content="width=device-width, initial-scale=1"><style class="silex-style-settings">.website-width {width: 1200px;}@media (min-width: 481px) {.silex-editor {min-width: 1400px;}}</style><!-- Silex HEAD tag do not remove --><div class="container">
-  
-</div><!-- End of Silex HEAD tag do not remove --></head>
+<style class="silex-prodotype-style" data-style-id="all-style">.text-element > .silex-element-content {font-family: 'Roboto', sans-serif;}</style><link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet" class="silex-custom-font"><meta name="viewport" content="width=device-width, initial-scale=1"><style class="silex-style-settings">.website-width {width: 1200px;}@media (min-width: 481px) {.silex-editor {min-width: 1400px;}}</style><!-- Silex HEAD tag do not remove --><!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, shrink-to-fit=0, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+  <title>360-image-viewer</title>
+  <link href="https://fonts.googleapis.com/css?family=Source+Sans+Pro" rel="stylesheet">
+  <style>
+  body {
+    margin: 0;
+    font-family: 'Source Sans Pro', Helvetica, sans-serif;
+    overflow: hidden;
+  }
+  * {
+    -webkit-touch-callout:none;
+    -webkit-text-size-adjust:none;
+    -webkit-tap-highlight-color:rgba(0,0,0,0);
+    -webkit-user-select:none;
+  }
+  .info {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    margin: 20px;
+    pointer-events: none;
+  }
+  .hr {
+    width: 20px;
+    height: 1px;
+    margin: 0;
+    padding: 0;
+    margin-bottom: 10px;
+    display: block;
+    background: white;
+    vertical-align: middle;
+  }
+  p {
+    display: block;
+    margin: 0;
+    padding: 0;
+    vertical-align: middle;
+    color: white;
+    font-size: 10px;
+  }
+  canvas, .grab {
+    cursor: -webkit-grab;
+    cursor: -moz-grab;
+  }
+  canvas:active, .grabbing {
+    cursor: -webkit-grabbing;
+    cursor: -moz-grabbing; 
+  }
+  #drop-region {
+    position: absolute;
+    top: 5px;
+    left: 5px;
+    width: calc(100% - 10px);
+    height: calc(100% - 10px);
+    pointer-events: none;
+    border: 2px dashed white;
+    box-sizing: border-box;
+    border-radius: 10px;
+    padding: 10px;
+    mix-blend-mode: overlay;
+    box-shadow: 0px 0px 20px 10px rgba(0, 0, 0, 0.5);
+  }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  <div class="info">
+    <div class="hr"></div>
+    <p>Drop an equirectangular JPG or PNG here to view it in 360º</p>
+  </div>
+  <div id="drop-region" style="display: none;"></div>
+  <script src="bundle.js"></script>
+</body>
+</html><!-- End of Silex HEAD tag do not remove --></head>
 
 <body data-silex-id="body-initial" class="body-initial all-style enable-mobile prevent-resizable prevent-selectable editable-style silex-runtime" data-silex-type="container-element" style="">
     
@@ -106,7 +240,7 @@ function flyTheFirefly(elm) {
 
 <section data-silex-type="container-element" class="container-element editable-style silex-id-1478366444112-1 section-element prevent-resizable page-page-1 paged-element" data-silex-id="silex-id-1478366444112-1">
         <div data-silex-type="container-element" class="editable-style silex-element-content silex-id-1478366444112-0 container-element website-width" data-silex-id="silex-id-1478366444112-0"></div>
-    </section><section data-silex-type="container-element" class="editable-style section-element silex-id-1474394621033-3 page-page-1 paged-element" data-silex-id="silex-id-1474394621033-3" style=""><div data-silex-type="container-element" class="editable-style container-element silex-id-1474394621032-2 website-width" data-silex-id="silex-id-1474394621032-2" title="" style=""><div data-silex-type="container-element" class="editable-style container-element silex-id-1713158517534-5" data-silex-id="silex-id-1713158517534-5" style=""></div></div></section><section data-silex-type="container-element" class="container-element editable-style silex-id-1478366450713-3 section-element prevent-resizable page-page-1 paged-element" data-silex-id="silex-id-1478366450713-3">
+    </section><section data-silex-type="container-element" class="editable-style section-element silex-id-1474394621033-3 page-page-1 paged-element" data-silex-id="silex-id-1474394621033-3" style=""><div data-silex-type="container-element" class="editable-style container-element silex-id-1474394621032-2 website-width" data-silex-id="silex-id-1474394621032-2" title="" style=""></div></section><section data-silex-type="container-element" class="container-element editable-style silex-id-1478366450713-3 section-element prevent-resizable page-page-1 paged-element" data-silex-id="silex-id-1478366450713-3">
         <div data-silex-type="container-element" class="editable-style silex-element-content silex-id-1478366450713-2 container-element website-width" data-silex-id="silex-id-1478366450713-2">
 
             <div data-silex-id="silex-id-1442914737143-3" class="editable-style silex-id-1442914737143-3 text-element" data-silex-type="text-element" style="">
